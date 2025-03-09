@@ -1,16 +1,17 @@
-// ChatRoom.js
 import React, { useState, useEffect, useRef } from 'react';
 import Modal from './Modal'; // Import the Modal component
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://chat.ransomewatch.online/api";
+
 const ChatRoom = () => {
   const [messages, setMessages] = useState([]);
-  const [user, setUser ] = useState('');
+  const [user, setUser] = useState('');
   const [message, setMessage] = useState('');
   const [onlineUsers, setOnlineUsers] = useState(0);
-  const [isModalOpen, setIsModalOpen] = useState(true); // State to control modal visibility
+  const [isModalOpen, setIsModalOpen] = useState(true);
   const messageListRef = useRef(null);
-  
-  // Initialize particles when component mounts
+
+  // Initialize particles on mount
   useEffect(() => {
     if (window.particlesJS) {
       window.particlesJS("particles-js", {
@@ -21,20 +22,13 @@ const ChatRoom = () => {
           line_linked: {
             enable: true,
             distance: 150,
-            color: "#00ffcc", // Neon color
+            color: "#00ffcc",
             opacity: 0.4,
             width: 1
           },
-          shape: {
-            type: "circle",
-          },
-          color: {
-            value: "#00ffcc"
-          },
-          opacity: {
-            value: 0.5,
-            random: false
-          }
+          shape: { type: "circle" },
+          color: { value: "#00ffcc" },
+          opacity: { value: 0.5 }
         },
         interactivity: {
           events: {
@@ -54,96 +48,76 @@ const ChatRoom = () => {
       });
     }
   }, []);
-  
-  // Check for existing username in local storage
+
+  // Load username from local storage
   useEffect(() => {
-    const storedUser  = localStorage.getItem('username');
-    if (storedUser ) {
-      setUser (storedUser );
-      setIsModalOpen(false); // Close modal if user is already set
+    const storedUser = localStorage.getItem('username');
+    if (storedUser) {
+      setUser(storedUser);
+      setIsModalOpen(false);
     }
   }, []);
-  
+
   const handleUsernameSubmit = (username) => {
-    setUser (username);
+    setUser(username);
     localStorage.setItem('username', username);
-    setIsModalOpen(false); // Close the modal after submitting
+    setIsModalOpen(false);
   };
 
+  // Fetch messages from backend
   const fetchMessages = async () => {
     try {
-      const response = await fetch('http://localhost:5000/messages');
+      const response = await fetch(`${API_BASE_URL}/messages`);
       const data = await response.json();
       setMessages(data);
-      
-      // Update online users count (random for demo)
       setOnlineUsers(Math.floor(Math.random() * 5) + 2);
     } catch (error) {
       console.error('Error fetching messages:', error);
     }
   };
-  
+
+  // Send new message
   const sendMessage = async (e) => {
     e.preventDefault();
     if (!user.trim() || !message.trim()) return;
-    
+
     try {
-      await fetch('http://localhost:5000/messages', {
+      await fetch(`${API_BASE_URL}/messages`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user, message }),
       });
-      
-      // Clear the message input after sending
+
       setMessage('');
-      
-      // Fetch messages to update the list
       fetchMessages();
     } catch (error) {
       console.error('Error sending message:', error);
     }
   };
-  
-  // Format time for messages
-  const formatTime = (timestamp) => {
-    const date = new Date(timestamp);
-    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-  };
-  
-  // Scroll to bottom of messages
+
+  // Auto-scroll to the latest message
   const scrollToBottom = () => {
     if (messageListRef.current) {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
   };
-  
+
+  // Fetch messages on mount and poll every 2 seconds
   useEffect(() => {
-    // Fetch messages on component mount
     fetchMessages();
-    
-    // Poll for new messages every 2 seconds
-    const interval = setInterval(() => {
-      fetchMessages();
-    }, 2000);
-    
+    const interval = setInterval(fetchMessages, 2000);
     return () => clearInterval(interval);
-  }, []); // Run only once on mount
-  
+  }, []);
+
   useEffect(() => {
-    // Scroll to bottom whenever messages change
     scrollToBottom();
   }, [messages]);
-  
+
   return (
     <>
       <div id="particles-js"></div>
-      <Modal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        onSubmit={handleUsernameSubmit} 
-      />
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleUsernameSubmit} />
+      
       <div className="chat-container">
         <div className="chat-header">
           <h2>CHAT ROOM</h2>
@@ -152,42 +126,19 @@ const ChatRoom = () => {
             <span>{onlineUsers} online</span>
           </div>
         </div>
-        
+
         <div className="message-list" ref={messageListRef}>
-          {messages.map((msg) => {
-            const isCurrentUser  = msg.user === user;
-            
-            return (
-              <div 
-                key={msg._id} 
-                className={`message-bubble ${isCurrentUser  ? 'message-self' : 'message-sender'}`}
-              >
-                <div className="message-user">{msg.user}</div>
-                <div className="message-text">{msg.message}</div>
-                <div className="message-time">{formatTime(msg.timestamp)}</div>
-              </div>
-            );
-          })}
+          {messages.map((msg) => (
+            <div key={msg._id} className={`message-bubble ${msg.user === user ? 'message-self' : 'message-sender'}`}>
+              <div className="message-user">{msg.user}</div>
+              <div className="message-text">{msg.message}</div>
+              <div className="message-time">{new Date(msg.timestamp).toLocaleTimeString()}</div>
+            </div>
+          ))}
         </div>
-        
+
         <form className="input-area" onSubmit={sendMessage}>
-          <input
-            className="user-input"
-            type="text"
-            placeholder="Your name"
-            value={user}
-            onChange={(e) => setUser (e.target.value)}
-            required
-            style={{ display: 'none' }} // Hide input for username since it's stored
-          />
-          <input
-            className="message-input"
-            type="text"
-            placeholder="Type your message..."
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            required
-          />
+          <input className="message-input" type="text" placeholder="Type your message..." value={message} onChange={(e) => setMessage(e.target.value)} required />
           <button className="send-button" type="submit">SEND</button>
         </form>
       </div>
